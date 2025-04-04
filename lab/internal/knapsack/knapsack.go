@@ -35,15 +35,12 @@ func (tg *TaskGenerator) generateTask(vectorNumber, tasksNumber int) []KnapsackT
 	vector := tg.vectorGenerator.GenerateVector()
 	tasks := make([]KnapsackTask, tasksNumber)
 
-	for i := 0; i < tasksNumber; i++ {
+	for i := range tasksNumber {
 
 		n := len(vector)
 
 		fraction := 0.1 + tg.rand.Float64()*0.4
-		numItems := int(float64(n) * fraction)
-		if numItems < 1 {
-			numItems = 1
-		}
+		numItems := max(int(float64(n)*fraction), 1)
 
 		indices := tg.rand.Perm(n)[:numItems]
 

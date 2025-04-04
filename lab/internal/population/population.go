@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	TournamentSize = 5
+	TournamentSize = 10
 )
 
 type GAConfig struct {
@@ -109,6 +109,21 @@ func (p *Population) EvolvePopulation() {
 	p.Chromosomes = newChromosomes
 }
 
+func (p *Population) tournamentSelection(k int) int {
+	nums := rand.Perm(p.PopulationSize)
+	nums = nums[:k]
+
+	best := nums[0]
+	for i := 1; i < k; i++ {
+		competitor := nums[i]
+		if p.Fitness(p.Chromosomes[competitor]) < p.Fitness(p.Chromosomes[best]) {
+			best = competitor
+		}
+	}
+
+	return best
+}
+
 func (p *Population) crossover(parent1, parent2 int) (Chromosome, Chromosome) {
 	if rand.Float64() > p.CrossoverRate {
 		return p.Chromosomes[parent1], p.Chromosomes[parent2]
@@ -124,21 +139,6 @@ func (p *Population) crossover(parent1, parent2 int) (Chromosome, Chromosome) {
 	copy(child2[:point], p.Chromosomes[parent2].Genes[:point])
 
 	return Chromosome{Genes: child1}, Chromosome{Genes: child2}
-}
-
-func (p *Population) tournamentSelection(k int) int {
-	nums := rand.Perm(p.PopulationSize)
-	nums = nums[:k]
-
-	best := nums[0]
-	for i := 1; i < k; i++ {
-		competitor := nums[i]
-		if p.Fitness(p.Chromosomes[competitor]) < p.Fitness(p.Chromosomes[best]) {
-			best = competitor
-		}
-	}
-
-	return best
 }
 
 func (p *Population) mutate(chromosome Chromosome) {

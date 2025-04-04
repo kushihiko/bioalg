@@ -18,7 +18,7 @@ const (
 	VectorLength             = 24
 	VectorNumber             = 50 // 50
 	TaskNumber               = 20 // 20
-	Folder                   = "results/4_3/"
+	Folder                   = "results/8/"
 	VectorsTable             = "vectors.csv"
 	TasksTable               = "tasks.csv"
 	BruteForceSolutionsTable = "brutesolv.csv"
@@ -26,10 +26,11 @@ const (
 )
 
 const (
-	PopulationSize = 200 // 750
+	PopulationSize = 750 // 750
 	ChromosomeSize = VectorLength
 	MutationRate   = 0.2
 	CrossoverRate  = 0.85
+	Module         = true
 )
 
 type geneticConfig struct {
@@ -37,6 +38,7 @@ type geneticConfig struct {
 	ChromosomeSize int
 	MutationRate   float64
 	CrossoverRate  float64
+	Module         bool
 }
 
 func main() {
@@ -48,7 +50,7 @@ func main() {
 	SaveBruteSolutions(bruteSolutions, Folder+BruteForceSolutionsTable)
 	printBruteAverage(bruteSolutions)
 
-	timeLimits := make([]int64, len(bruteSolutions))
+	timeLimits := make([]float64, len(bruteSolutions))
 	for i, bruteSolution := range bruteSolutions {
 		timeLimits[i] = bruteSolution.TimeFirstSolution * 2
 	}
@@ -60,6 +62,7 @@ func main() {
 		ChromosomeSize: ChromosomeSize,
 		MutationRate:   MutationRate,
 		CrossoverRate:  CrossoverRate,
+		Module:         Module,
 	}, timeLimits)
 	SaveGenericSolutions(genericSolutions, Folder+GeneticSolutionTable)
 	printGenAverage(genericSolutions)
@@ -105,7 +108,7 @@ func bruteForceSolve(tasks []knapsack.KnapsackTask) []solution.BruteSolution {
 	return solutions
 }
 
-func geneticSolveParallel(tasks []knapsack.KnapsackTask, config geneticConfig, timeLimits []int64) []solution.GeneticSolution {
+func geneticSolveParallel(tasks []knapsack.KnapsackTask, config geneticConfig, timeLimits []float64) []solution.GeneticSolution {
 	solver := solution.GeneticSolver{
 		PopulationSize: config.PopulationSize,
 		ChromosomeSize: config.ChromosomeSize,
@@ -119,7 +122,7 @@ func geneticSolveParallel(tasks []knapsack.KnapsackTask, config geneticConfig, t
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			solutions[i] = solver.Solve(GeneticTaskImpl{Task: task}, timeLimits[i])
+			solutions[i] = solver.Solve(GeneticTaskImpl{Task: task, Module: config.Module}, timeLimits[i])
 		}()
 	}
 
@@ -127,7 +130,7 @@ func geneticSolveParallel(tasks []knapsack.KnapsackTask, config geneticConfig, t
 	return solutions
 }
 
-func geneticSolve(tasks []knapsack.KnapsackTask, config geneticConfig, timeLimits []int64) []solution.GeneticSolution {
+func geneticSolve(tasks []knapsack.KnapsackTask, config geneticConfig, timeLimits []float64) []solution.GeneticSolution {
 	solver := solution.GeneticSolver{
 		PopulationSize: config.PopulationSize,
 		ChromosomeSize: config.ChromosomeSize,
@@ -137,14 +140,15 @@ func geneticSolve(tasks []knapsack.KnapsackTask, config geneticConfig, timeLimit
 	solutions := make([]solution.GeneticSolution, len(tasks))
 
 	for i, task := range tasks {
-		solutions[i] = solver.Solve(GeneticTaskImpl{Task: task}, timeLimits[i])
+		solutions[i] = solver.Solve(GeneticTaskImpl{Task: task, Module: config.Module}, timeLimits[i])
 	}
 
 	return solutions
 }
 
 type GeneticTaskImpl struct {
-	Task knapsack.KnapsackTask
+	Task   knapsack.KnapsackTask
+	Module bool
 }
 
 //func (gt GeneticTaskImpl) Fitness(x population.Chromosome) float64 {
@@ -177,8 +181,30 @@ func (gt GeneticTaskImpl) Fitness(x population.Chromosome) int {
 	return diff
 }
 
+func (gt GeneticTaskImpl) FitnessModule(x population.Chromosome) int {
+	sum := 0
+	module := gt.Task.Amax + 1
+
+	for i, gene := range x.Genes {
+		if gene && i < gt.Task.VectorLength {
+			sum += gt.Task.Vector[i]
+		}
+	}
+
+	diff := (sum % module) - (gt.Task.TargetWeight % module)
+	if diff < 0 {
+		diff = -diff
+	}
+
+	return diff
+}
+
 func (gt GeneticTaskImpl) GetTask() knapsack.KnapsackTask {
 	return gt.Task
+}
+
+func (gt GeneticTaskImpl) IsModule() bool {
+	return gt.Module
 }
 
 func SaveVectors(tasks []knapsack.KnapsackTask, filename string) {
@@ -231,48 +257,16 @@ func SaveTasks(tasks []knapsack.KnapsackTask, filename string) {
 		panic(err)
 	}
 
-	// First raw
-	var str []string
-	str = append(str, "task number")
-	for i := range tasks {
-		str = append(str, strconv.Itoa(i+1))
-	}
-	err = tbl.Write(str)
+	err = tbl.Write([]string{"task number", "vector number", "target weight", "fraction"})
 	if err != nil {
 		panic(err)
 	}
 
-	// Second raw
-	str = make([]string, 0)
-	str = append(str, "vector number")
-	for _, task := range tasks {
-		str = append(str, strconv.Itoa(task.VectorNumber))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Third raw
-	str = make([]string, 0)
-	str = append(str, "target weight")
-	for _, task := range tasks {
-		str = append(str, strconv.Itoa(task.TargetWeight))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Fourth raw
-	str = make([]string, 0)
-	str = append(str, "fraction")
-	for _, task := range tasks {
-		str = append(str, fmt.Sprintf("%.3f", task.Fraction))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
+	for i, task := range tasks {
+		err = tbl.Write([]string{strconv.Itoa(i + 1), strconv.Itoa(task.VectorNumber), strconv.Itoa(task.TargetWeight), fmt.Sprintf("%.3f", task.Fraction)})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	err = tbl.Flush()
@@ -296,48 +290,16 @@ func SaveBruteSolutions(solutions []solution.BruteSolution, filename string) {
 		panic(err)
 	}
 
-	// First raw
-	var str []string
-	str = append(str, "task number")
-	for i := range solutions {
-		str = append(str, strconv.Itoa(i+1))
-	}
-	err = tbl.Write(str)
+	err = tbl.Write([]string{"task number", "first solution time", "all solutions time", "answers number"})
 	if err != nil {
 		panic(err)
 	}
 
-	// Second raw
-	str = make([]string, 0)
-	str = append(str, "first solution time")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.TimeFirstSolution)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Third raw
-	str = make([]string, 0)
-	str = append(str, "all solutions time")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.TimeAllSolutions)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Fourth raw
-	str = make([]string, 0)
-	str = append(str, "answers number")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(len(solution.Solutions)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
+	for i, solution := range solutions {
+		err = tbl.Write([]string{strconv.Itoa(i + 1), fmt.Sprintf("%.3f", solution.TimeFirstSolution), fmt.Sprintf("%.3f", solution.TimeAllSolutions), strconv.Itoa(len(solution.Solutions))})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	err = tbl.Flush()
@@ -374,64 +336,16 @@ func SaveGenericSolutions(solutions []solution.GeneticSolution, filename string)
 		panic(err)
 	}
 
-	// First raw
-	var str []string
-	str = append(str, "task number")
-	for i := range solutions {
-		str = append(str, strconv.Itoa(i+1))
-	}
-	err = tbl.Write(str)
+	err = tbl.Write([]string{"task number", "solution time", "fitness minimum", "stop reason", "generations number"})
 	if err != nil {
 		panic(err)
 	}
 
-	// Second raw
-	str = make([]string, 0)
-	str = append(str, "solution time")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.Time)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Third raw
-	str = make([]string, 0)
-	str = append(str, "fitness minimum")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.Fitness)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	// Fourth raw
-	str = make([]string, 0)
-	str = append(str, "stop reason")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.StopReason)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
-	}
-
-	err = tbl.Flush()
-	if err != nil {
-		panic(err)
-	}
-
-	// Fifth raw
-	str = make([]string, 0)
-	str = append(str, "generation number")
-	for _, solution := range solutions {
-		str = append(str, strconv.Itoa(int(solution.GenerationNumber)))
-	}
-	err = tbl.Write(str)
-	if err != nil {
-		panic(err)
+	for i, solution := range solutions {
+		err = tbl.Write([]string{strconv.Itoa(i + 1), fmt.Sprintf("%.3f", solution.Time), strconv.Itoa(int(solution.Fitness)), strconv.Itoa(int(solution.StopReason)), strconv.Itoa(int(solution.GenerationNumber))})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	err = tbl.Flush()
@@ -447,7 +361,7 @@ func printGenAverage(solutions []solution.GeneticSolution) {
 
 	for _, item := range solutions {
 		if item.StopReason == solution.Found {
-			avgTime += float64(item.Time) / float64(len(solutions))
+			avgTime += item.Time / float64(len(solutions))
 			avgGenNumber += float64(item.GenerationNumber) / float64(len(solutions))
 			solved++
 		}

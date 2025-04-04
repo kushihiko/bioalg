@@ -7,8 +7,8 @@ import (
 
 type BruteSolution struct {
 	Solutions         [][]int
-	TimeFirstSolution int64
-	TimeAllSolutions  int64
+	TimeFirstSolution float64
+	TimeAllSolutions  float64
 }
 
 func FindSolutionByBruteForce(task knapsack.KnapsackTask) BruteSolution {
@@ -16,8 +16,8 @@ func FindSolutionByBruteForce(task knapsack.KnapsackTask) BruteSolution {
 
 	n := len(task.Vector)
 	var solutions [][]int
-	var timeFirstSolution int64
-	var timeAllSolutions int64
+	var timeFirstSolution float64
+	var timeAllSolutions float64
 
 	for mask := 0; mask < (1 << n); mask++ {
 		weight := 0
@@ -37,11 +37,11 @@ func FindSolutionByBruteForce(task knapsack.KnapsackTask) BruteSolution {
 			}
 
 			solutions = append(solutions, subset)
-			timeFirstSolution = time.Since(startTime).Milliseconds()
+			timeFirstSolution = time.Since(startTime).Seconds()
 		}
 	}
 
-	timeAllSolutions = time.Since(startTime).Milliseconds()
+	timeAllSolutions = time.Since(startTime).Seconds()
 
 	return BruteSolution{
 		Solutions:         solutions,

@@ -3,7 +3,6 @@ package solution
 import (
 	"lab/internal/knapsack"
 	"lab/internal/population"
-	"sync"
 	"time"
 )
 
@@ -17,7 +16,7 @@ const (
 
 type GeneticSolution struct {
 	Solution         []int
-	Time             int64
+	Time             float64
 	Fitness          int
 	StopReason       Status
 	GenerationNumber int64
@@ -41,13 +40,18 @@ func NewGeneticSolver(populationSize, chromosomeSize int, mutationRate, crossove
 
 type GeneticTask interface {
 	Fitness(population.Chromosome) int
+	FitnessModule(population.Chromosome) int
 	GetTask() knapsack.KnapsackTask
+	IsModule() bool
 }
 
-var mu sync.Mutex
-
-func (gs GeneticSolver) Solve(geneticTask GeneticTask, timeLimit int64) GeneticSolution {
-	pop := population.NewPopulation(gs.PopulationSize, gs.ChromosomeSize, gs.MutationRate, gs.CrossoverRate, geneticTask.Fitness)
+func (gs GeneticSolver) Solve(geneticTask GeneticTask, timeLimit float64) GeneticSolution {
+	var pop *population.Population
+	if geneticTask.IsModule() {
+		pop = population.NewPopulation(gs.PopulationSize, gs.ChromosomeSize, gs.MutationRate, gs.CrossoverRate, geneticTask.FitnessModule)
+	} else {
+		pop = population.NewPopulation(gs.PopulationSize, gs.ChromosomeSize, gs.MutationRate, gs.CrossoverRate, geneticTask.Fitness)
+	}
 
 	start := time.Now()
 
@@ -73,7 +77,7 @@ func (gs GeneticSolver) Solve(geneticTask GeneticTask, timeLimit int64) GeneticS
 			break
 		}
 
-		if time.Since(start).Milliseconds() > timeLimit {
+		if time.Since(start).Seconds() > timeLimit {
 			stopReason = TimeExpired
 			break
 		}
@@ -98,7 +102,7 @@ func (gs GeneticSolver) Solve(geneticTask GeneticTask, timeLimit int64) GeneticS
 
 	return GeneticSolution{
 		Solution:         solution,
-		Time:             time.Since(start).Milliseconds(),
+		Time:             time.Since(start).Seconds(),
 		Fitness:          bestFitness,
 		StopReason:       stopReason,
 		GenerationNumber: generationNumber,
